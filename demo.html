@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8' />
+<script>
+	function $(id) {
+		return document.querySelector(id);
+	}
+	
+	function _make_transform(width, height,right, bottom) {
+		return "scale(" 
+			+ width + "," 
+			+ height + ") translate("
+			+ right  * 100 + "%,"
+			+ bottom * 100 + "%)";
+	}
+	function _make_transform_offset(offset, width, height,right, bottom) {
+		return "translate(" 
+			+ (-offset)  * 100 + "%,0) "
+			+ _make_transform(width, height, right, bottom);
+	}
+
+	function make_transform_offset(offset, up, down, left, right) {
+		var width = (1 - left - right);
+		var height = (1 - up - down);
+		var xright = (0.5 - right) / width - 0.5
+		var xbottom  = (0.5 - down) / height - 0.5
+		return _make_transform_offset(offset, width, height, xright, xbottom);
+	}
+	const OP_LEFT = "D";
+	const OP_RIGHT = "C";
+	const OP_UP = "V";
+	const OP_DOWN = "A";
+	const OP_LR = "T";
+	const OP_UD = "H";
+	const OP_ALL = "X";
+	const ESC_START = "`"
+	const ESC_END = "`"
+	function ismultiop(str)  {
+		return str == OP_LR || str == OP_UD || str == OP_ALL;
+	}
+	function isoptor(str) {
+		return str == OP_LEFT || str == OP_RIGHT || str == OP_UP || str == OP_DOWN || ismultiop(str);
+	}
+	function isnumber(str) {
+		return str == "0" || str == "1" || str == "2" || str == "3" 
+		|| str == "4" || str == "5" || str == "6" || str == "7"
+		|| str == "8" || str == "9";
+	}
+	function isspace(str) {
+		return str == " " || str == "\t" || str == "\n" || str == "　";
+	}
+	function expect_number(str) {
+		return str.length >= 2 && (
+			isnumber(str.substr(str.length - 1)) 
+		 || isoptor(str.substr(str.length - 1))
+		 );
+	}
+	function parse2arrofstr(str) {
+		var arr = new Array();
+		var arrcount = 0; 
+		for (var i = 0; i < str.length; i++) {
+			var tmp = str.substr(i, 1);
+			if (isspace(tmp)) {
+				continue;
+			} else if (arrcount > 0 && isoptor(tmp)) {
+				arr[arrcount - 1] += tmp;
+			} else if (arrcount > 0 && expect_number(arr[arrcount - 1]) && isnumber(tmp)) {
+				arr[arrcount - 1] += tmp;
+			} else {
+				arr.push(tmp);
+				arrcount++;
+			}
+		}
+		return arr;
+	}
+	function getpercent(str, startidx, def) {
+		var ret = "";
+		for (var i = startidx; i < str.length; i++) {
+			var tmp = str.substr(i, 1);
+			if (!isnumber(tmp)) {
+				break;
+			}
+			ret += tmp;
+
+		}
+		if (ret == "") {
+			return def
+		} else {
+			return Number("0." + ret);
+		}
+	}
+	function parse2arrofobj(str) {
+		var arrofstr = parse2arrofstr(str)
+		var ret = new Array();
+		for  (var i = 0; i < arrofstr.length; i++) {
+			var tmp = {};
+			tmp.ch = arrofstr[i].substr(0, 1);
+			tmp.up = 0;
+			tmp.down = 0;
+			tmp.left = 0;
+			tmp.right = 0;
+
+			for (var j = 1; j < arrofstr[i].length; j++) {
+				var ttmp = arrofstr[i].substr(j, 1);
+				if (!isoptor(ttmp)) {
+					continue;
+				}
+				var value = getpercent(arrofstr[i], j+1, ismultiop(ttmp) ? 0.25 : 0.5)
+
+				if (ttmp == OP_LEFT) {
+					tmp.left = value;
+				} else if (ttmp == OP_RIGHT) {
+					tmp.right = value;
+				} else if (ttmp == OP_DOWN) {
+					tmp.down = value;
+				} else if (ttmp== OP_UP){
+					tmp.up = value;
+				} else if (ttmp == OP_UD) {
+					tmp.up = value;
+					tmp.down = value;
+				} else if (ttmp == OP_LR) {
+					tmp.left = value;
+					tmp.right = value;
+				} else {
+					tmp.up = value;
+					tmp.down = value;
+					tmp.left = value;
+					tmp.right = value;
+				}
+			}
+			ret.push(tmp);
+		}
+		return ret;
+	}
+	function parse2span(str) {
+		var arrofobj = parse2arrofobj(str);
+		
+		var ret = "<span style='display:inline-block; width:1em; white-space: nowrap;'>"
+		for (var i = 0; i < arrofobj.length; i++) {
+			ret += parse2ispan(i, arrofobj[i]);
+		}
+		ret += "</span>"
+		return ret;
+	}
+	function parse2ispan(i, obj) {
+		var ret = "<span style='display:inline-block;transform: " ;
+		ret += make_transform_offset(i, obj.up, obj.down, obj.left, obj.right);
+		ret += "'>" +obj.ch + "</span>";
+		return ret;
+	}
+	function parse(val) {
+		var tmp = "";
+		var found = false;
+		var ret = "";
+		for (var i = 0; i < val.length; i++) {
+			var ch = val.substr(i, 1);
+			if (ch == ESC_START && !found) {
+				found = true;
+			} else if (ch == ESC_END && found) {
+				ret += parse2span(tmp)
+				tmp = "";
+				found = false
+			} else if (found) {
+				tmp += ch;
+			} else if (ch == "\n") {
+				ret += "<br/>"
+			} else {
+				ret += ch;
+			} 
+		}
+		return ret;
+	}
+</script>
+
+</head>
+<body style='font-size:30px'>
+	<textarea id='input' style='font-size:30px;position: absolute; width:40%; height:80%; top:0; left:0'>这是一个例子:`你A4V2 好VA1`！`世C界D`。
+
+`囗城X2`
+
+`文T1A4V2 化V4A1T`
+
+</textarea>
+	<p id='output' style='position: absolute; width:40%; height:80%; top:0; left:50%'></p>
+<script>
+	$("#input").addEventListener("input", function() {
+		var val = $("#input").value;
+		$("#output").innerHTML = parse(val);
+	});
+		var val = $("#input").value;
+		$("#output").innerHTML = parse(val);
+		
+</script>
+</body>
+</html>
